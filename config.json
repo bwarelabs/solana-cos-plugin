@@ -1,0 +1,6 @@
+{
+    "libpath": "./target/debug/libblast_cos_plugin.so",
+    "workspace": "./workspace",
+    "max_file_size_mb": 100,
+    "slot_range": 1000
+}
