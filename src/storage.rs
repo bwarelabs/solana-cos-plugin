@@ -4,7 +4,9 @@ use solana_sdk::message::AccountKeys;
 use solana_sdk::pubkey::Pubkey;
 use solana_storage_proto::convert::{entries, generated, tx_by_addr};
 use solana_transaction_status::extract_memos::ExtractMemos;
-use solana_transaction_status::{TransactionByAddrInfo, VersionedTransactionWithStatusMeta};
+use solana_transaction_status::{
+    EntrySummary, TransactionByAddrInfo, VersionedTransactionWithStatusMeta,
+};
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::{Result, Write};
@@ -44,7 +46,7 @@ impl StorageManager {
     pub fn save(
         &self,
         slot: Slot,
-        confirmed_block: CosVersionedConfirmedBlockWithEntries,
+        confirmed_block: &CosVersionedConfirmedBlockWithEntries,
     ) -> Result<()> {
         log::trace!("Save request received: {:?}", slot);
 
@@ -103,13 +105,25 @@ impl StorageManager {
             })
             .collect();
 
-        let num_entries = entries.len();
-        let entry_cell = (
-            Self::slot_to_entries_key(slot),
-            entries::Entries {
-                entries: entries.into_iter().enumerate().map(Into::into).collect(),
-            },
-        );
+        if !entries.is_empty() {
+            let entry_cell = (
+                Self::slot_to_entries_key(slot),
+                entries::Entries {
+                    entries: entries
+                        .iter()
+                        .map(|entry| EntrySummary {
+                            num_hashes: entry.num_hashes,
+                            hash: entry.hash,
+                            num_transactions: entry.num_transactions,
+                            starting_transaction_index: entry.starting_transaction_index,
+                        })
+                        .enumerate()
+                        .map(Into::into)
+                        .collect(),
+                },
+            );
+            self.put_protobuf_cells::<entries::Entries>(slot, "entries", &[entry_cell])?;
+        }
 
         if !tx_cells.is_empty() {
             self.put_bincode_cells::<CosTransactionInfo>(slot, "tx", &tx_cells)?;
@@ -123,11 +137,10 @@ impl StorageManager {
             )?;
         }
 
-        if num_entries > 0 {
-            self.put_protobuf_cells::<entries::Entries>(slot, "entries", &[entry_cell])?;
-        }
-
-        let blocks_cells = [(Self::slot_to_blocks_key(slot), confirmed_block.into())];
+        let blocks_cells = [(
+            Self::slot_to_blocks_key(slot),
+            confirmed_block.clone().into(),
+        )];
         self.put_protobuf_cells::<generated::ConfirmedBlock>(slot, "blocks", &blocks_cells)?;
 
         Ok(())

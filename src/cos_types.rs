@@ -6,13 +6,6 @@ use solana_sdk::{
 };
 use solana_transaction_status::{EntrySummary, Rewards, VersionedConfirmedBlock};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum CosSlotStatus {
-    Processed,
-    Rooted,
-    Confirmed,
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CosTransactionInfo {
     pub slot: Slot, // The slot that contains the block with this transaction in it
@@ -65,9 +58,8 @@ impl Default for CosVersionedConfirmedBlockWithEntries {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SlotStatusEvent {
+pub struct SlotFinalizedEvent {
     pub slot: Slot,
-    pub status: CosSlotStatus,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -101,15 +93,10 @@ pub struct EntryEvent {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Events {
-    SlotStatus(SlotStatusEvent),
+    SlotFinalized(SlotFinalizedEvent),
     Transaction(TransactionEvent),
     BlockInfo(BlockInfoEvent),
     Entry(EntryEvent),
-}
-
-pub struct SlotData {
-    pub block_with_entries: CosVersionedConfirmedBlockWithEntries,
-    pub status: CosSlotStatus,
 }
 
 pub type RowKey = String;

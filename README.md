@@ -47,35 +47,15 @@ To use the `solana-cos-plugin`, follow these steps:
     {
         "libpath": "./target/debug/libblast_cos_plugin.so",
         "workspace": "./workspace",
-        "file_prefix": "log_",
         "max_file_size_mb": 100,
-        "cos": {
-            "endpoint": "your-cos-endpoint",
-            "access_key": "your-access-key",
-            "secret_key": "your-secret-key",
-            "bucket": "your-cos-bucket"
-        },
-        "hbase": {
-            "zookeeper_quorum": "your-zookeeper-quorum",
-            "znode_parent": "your-znode-parent",
-            "table": "your-hbase-table"
-        }
+        "slot_range": 1000
     }
     ```
 
     - **`libpath`**: Path to the plugin's shared library.
     - **`workspace`**: A working folder where the plugin will store files while running.
-    - **`file_prefix`**: Prefix for log files created by the plugin.
     - **`max_file_size_mb`**: Maximum file size for storing data. When this size is reached, a new file is created.
-    - **`cos`**: Configuration settings for Tencent COS.
-        - `endpoint`: COS service endpoint.
-        - `access_key`: Access key for COS.
-        - `secret_key`: Secret key for COS.
-        - `bucket`: COS bucket name.
-    - **`hbase`**: Configuration settings for HBase.
-        - `zookeeper_quorum`: Zookeeper quorum for HBase.
-        - `znode_parent`: Znode parent for HBase.
-        - `table`: HBase table name.
+    - **`slot_range`**: How many slots per folder to store on file storage.
 
 2. **Start the Solana Validator with the Geyser Plugin:**
     Run the following command in your project directory:

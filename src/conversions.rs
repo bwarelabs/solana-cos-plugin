@@ -1,5 +1,5 @@
 use solana_geyser_plugin_interface::geyser_plugin_interface::{
-    ReplicaBlockInfoV3, ReplicaEntryInfoV2, ReplicaTransactionInfoV2, SlotStatus,
+    ReplicaBlockInfoV3, ReplicaEntryInfoV2, ReplicaTransactionInfoV2,
 };
 use solana_sdk::{
     hash::Hash,
@@ -12,19 +12,8 @@ use solana_transaction_status::{
 };
 
 use crate::cos_types::{
-    BlockInfoEvent, CosSlotStatus, CosTransactionStatusMeta, CosVersionedTransactionWithStatusMeta,
-    EntryEvent,
+    BlockInfoEvent, CosTransactionStatusMeta, CosVersionedTransactionWithStatusMeta, EntryEvent,
 };
-
-impl From<SlotStatus> for CosSlotStatus {
-    fn from(status: SlotStatus) -> Self {
-        match status {
-            SlotStatus::Processed => CosSlotStatus::Processed,
-            SlotStatus::Rooted => CosSlotStatus::Rooted,
-            SlotStatus::Confirmed => CosSlotStatus::Confirmed,
-        }
-    }
-}
 
 impl From<&ReplicaBlockInfoV3<'_>> for BlockInfoEvent {
     fn from(block_info: &ReplicaBlockInfoV3) -> Self {
@@ -59,16 +48,17 @@ impl From<&ReplicaTransactionInfoV2<'_>> for CosVersionedTransactionWithStatusMe
     fn from(transaction_info: &ReplicaTransactionInfoV2) -> Self {
         CosVersionedTransactionWithStatusMeta {
             transaction: VersionedTransaction {
-                signatures: transaction_info.transaction.signatures().to_vec(),
+                signatures: vec![*transaction_info.signature],
                 message: VersionedMessage::V0(Message {
                     header: *transaction_info.transaction.message().header(),
-                    account_keys: transaction_info
-                        .transaction
-                        .message()
-                        .account_keys()
-                        .iter()
-                        .map(ref_pubkey_to_pubkey)
-                        .collect(),
+                    account_keys: vec![],
+                    // transaction_info
+                    //     .transaction
+                    //     .message()
+                    //     .account_keys()
+                    //     .iter()
+                    //     .map(ref_pubkey_to_pubkey)
+                    //     .collect(),
                     recent_blockhash: *transaction_info.transaction.message().recent_blockhash(),
                     instructions: transaction_info
                         .transaction
