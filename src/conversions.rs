@@ -48,17 +48,16 @@ impl From<&ReplicaTransactionInfoV2<'_>> for CosVersionedTransactionWithStatusMe
     fn from(transaction_info: &ReplicaTransactionInfoV2) -> Self {
         CosVersionedTransactionWithStatusMeta {
             transaction: VersionedTransaction {
-                signatures: vec![*transaction_info.signature],
+                signatures: transaction_info.transaction.signatures().to_vec(),
                 message: VersionedMessage::V0(Message {
                     header: *transaction_info.transaction.message().header(),
-                    account_keys: vec![],
-                    // transaction_info
-                    //     .transaction
-                    //     .message()
-                    //     .account_keys()
-                    //     .iter()
-                    //     .map(ref_pubkey_to_pubkey)
-                    //     .collect(),
+                    account_keys: transaction_info
+                        .transaction
+                        .message()
+                        .account_keys()
+                        .iter()
+                        .map(ref_pubkey_to_pubkey)
+                        .collect(),
                     recent_blockhash: *transaction_info.transaction.message().recent_blockhash(),
                     instructions: transaction_info
                         .transaction

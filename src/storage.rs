@@ -94,7 +94,7 @@ impl StorageManager {
             .into_iter()
             .map(|(address, transaction_info_by_addr)| {
                 (
-                    format!("{}/{}", address, Self::slot_to_tx_by_addr_key(slot)),
+                    format!("{}_{}", address, Self::slot_to_tx_by_addr_key(slot)),
                     tx_by_addr::TransactionByAddr {
                         tx_by_addrs: transaction_info_by_addr
                             .into_iter()
@@ -256,11 +256,14 @@ impl StorageManager {
 
     fn save_row(folder_path: &Path, key: &str, data_type: &str, data: &[u8]) -> Result<()> {
         let file_path = folder_path.join(format!("{key}.{data_type}"));
+        log::info!("Saving to {:?}", file_path);
         let mut file = OpenOptions::new()
+            .create(true)
             .truncate(true)
             .write(true)
             .open(file_path)?;
-        file.write_all(data)
+        file.write_all(data)?;
+        file.sync_all()
     }
 }
 
