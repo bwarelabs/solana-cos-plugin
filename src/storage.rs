@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::{Result, Write};
 use std::path::{Path, PathBuf};
+use crate::compression::compress_best;
 
 use crate::cos_types::{
     CosTransactionInfo, CosVersionedConfirmedBlockWithEntries,
@@ -55,6 +56,7 @@ impl StorageManager {
             block: confirmed_block,
             entries,
         } = confirmed_block;
+        // let reserved_account_keys = ReservedAccountKeys::new_all_activated();
 
         let mut tx_cells = Vec::with_capacity(confirmed_block.transactions.len());
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
@@ -66,6 +68,7 @@ impl StorageManager {
 
             for address in transaction_with_meta.account_keys().iter() {
                 if !solana_program::sysvar::is_sysvar_id(address) {
+                // if !reserved_account_keys.is_reserved(address) { // todo: this should be used, based on agave
                     by_addr
                         .entry(address)
                         .or_default()
@@ -94,6 +97,7 @@ impl StorageManager {
             .into_iter()
             .map(|(address, transaction_info_by_addr)| {
                 (
+                    // todo: isn't this actual data? do we need to use '_' instead of '/' ?
                     format!("{}_{}", address, Self::slot_to_tx_by_addr_key(slot)),
                     tx_by_addr::TransactionByAddr {
                         tx_by_addrs: transaction_info_by_addr
@@ -207,7 +211,7 @@ impl StorageManager {
     {
         let mut new_row_data = vec![];
         for (row_key, data) in cells {
-            let data = bincode::serialize(&data).unwrap();
+            let data = compress_best(&bincode::serialize(&data).unwrap())?;
             new_row_data.push((row_key, "bin".to_string(), data));
         }
         self.save_row_data(slot, table, &new_row_data)
@@ -226,7 +230,8 @@ impl StorageManager {
         for (row_key, data) in cells {
             let mut buf = Vec::with_capacity(data.encoded_len());
             data.encode(&mut buf).unwrap();
-            new_row_data.push((row_key, "proto".to_string(), buf));
+            let data = compress_best(&buf)?;
+            new_row_data.push((row_key, "proto".to_string(), data));
         }
         self.save_row_data(slot, table, &new_row_data)
     }
