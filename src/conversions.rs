@@ -81,6 +81,7 @@ impl From<&ReplicaTransactionInfoV2<'_>> for CosVersionedTransactionWithStatusMe
                     .transaction_status_meta
                     .loaded_addresses
                     .clone(),
+                index: transaction_info.index,
             },
         }
     }

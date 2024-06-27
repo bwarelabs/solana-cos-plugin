@@ -18,6 +18,7 @@ pub struct CosTransactionInfo {
 pub struct CosTransactionStatusMeta {
     pub status: Option<TransactionError>,
     pub loaded_addresses: LoadedAddresses,
+    pub index: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -38,6 +39,8 @@ impl CosVersionedTransactionWithStatusMeta {
 pub struct CosVersionedConfirmedBlockWithEntries {
     pub block: VersionedConfirmedBlock,
     pub entries: Vec<EntrySummary>,
+    pub executed_transaction_count: u64,
+    pub entry_count: u64,
 }
 
 impl Default for CosVersionedConfirmedBlockWithEntries {
@@ -53,6 +56,8 @@ impl Default for CosVersionedConfirmedBlockWithEntries {
                 block_height: Default::default(),
             },
             entries: Default::default(),
+            executed_transaction_count: Default::default(),
+            entry_count: Default::default(),
         }
     }
 }
