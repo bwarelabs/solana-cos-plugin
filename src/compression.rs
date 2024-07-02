@@ -1,3 +1,6 @@
+/// Compression utilities
+///
+/// Note that this code is copied from Solana and should be kept in sync with it.
 use {
     enum_iterator::{all, Sequence},
     std::io::{self, Write},

@@ -25,9 +25,13 @@ enum KeyType<'a> {
     Unknown(&'a Pubkey),
 }
 
+/// Manages storage of confirmed blocks and transactions
 pub struct StorageManager {
+    /// The directory where finalized block ranges are moved.
     ready_path: PathBuf,
+    /// The directory where finalized block ranges are staged.
     staging_path: PathBuf,
+    /// The number of slots in each range.
     slot_range: u64,
 }
 
@@ -48,6 +52,9 @@ impl StorageManager {
         })
     }
 
+    /// Save a confirmed block and its transactions to storage
+    ///
+    /// Note that this code is copied from solana and should be kept in sync with the original.
     pub fn save(
         &self,
         slot: Slot,
@@ -250,7 +257,7 @@ impl StorageManager {
             let timestamp = chrono::Utc::now().timestamp_millis();
             let storage_folder_path = self
                 .ready_path
-                .join(format!("{slot_range_str}_{timestamp:0>20}"));
+                .join(format!("{slot_range_str}_{timestamp:0>15}"));
 
             // Ensure clean storage directory
             if Path::exists(&storage_folder_path) {

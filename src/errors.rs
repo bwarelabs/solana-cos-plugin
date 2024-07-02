@@ -18,7 +18,7 @@ pub enum GeyserPluginCosError {
 impl From<std::io::Error> for GeyserPluginCosError {
     fn from(err: std::io::Error) -> Self {
         GeyserPluginCosError::InternalError {
-            msg: format!("IO error: {err:?}"),
+            msg: format!("General error: {err:?}"),
         }
     }
 }

@@ -28,8 +28,11 @@ use {
 
 #[derive(Default)]
 pub struct GeyserPluginCos {
+    /// In memory storage for the confirmed blocks.
     datastore: Arc<Mutex<HashMap<Slot, CosVersionedConfirmedBlockWithEntries>>>,
+    /// Solana geyser notification backup logger.
     logger: Arc<Mutex<Option<LogManager>>>,
+    /// On disk storage for the confirmed blocks.
     storage: Arc<Mutex<Option<StorageManager>>>,
 }
 
@@ -64,6 +67,8 @@ impl GeyserPlugin for GeyserPluginCos {
     /// {
     ///    "libpath": "/home/solana/target/release/libgayser_plugin_cos.so",
     ///    "workspace": "/path/to/workspace",
+    ///    "max_file_size_mb": 100,
+    ///    "slot_range": 1000
     /// }
     fn on_load(&mut self, config_file: &str, _is_reload: bool) -> Result<()> {
         solana_logger::setup_with_default("info");
@@ -255,6 +260,7 @@ impl GeyserPlugin for GeyserPluginCos {
                 }
             }
         } {
+            // TODO: Why is this not happening?
             panic!("Error processing entry: {err:?}")
         }
         Ok(())
@@ -366,6 +372,8 @@ impl GeyserPluginCos {
         slot: Slot,
         block_with_entries: &CosVersionedConfirmedBlockWithEntries,
     ) -> Result<()> {
+        // TODO: entry count is always 0, even when there are entries!
+        // Should we correct block metadata or ignore this misalignment?
         if block_with_entries.executed_transaction_count
             != block_with_entries.block.transactions.len() as u64
             || block_with_entries.entry_count != block_with_entries.entries.len() as u64

@@ -5,11 +5,17 @@ use std::path::{Path, PathBuf};
 use crate::event::{Event, EventReceiver};
 use crate::geyser_plugin_cos_config::GeyserPluginCosConfig;
 
+/// Manages binary log files
 pub struct LogManager {
+    /// The directory where log files are stored
     workspace: PathBuf,
+    /// The maximum size of a log file
     max_file_size: u64,
+    /// The size of the current log file
     current_file_size: u64,
+    /// The index of the current log file
     file_index: u64,
+    /// The current log file
     current_file: File,
 }
 
@@ -38,6 +44,7 @@ impl LogManager {
         self.current_file.sync_all()
     }
 
+    /// Discover the latest log file index and extract the index from the file name
     fn find_latest_file_index(workspace: &Path) -> io::Result<u64> {
         let mut file_index = 0;
 
@@ -61,6 +68,7 @@ impl LogManager {
         Ok(file_index)
     }
 
+    /// Create a new log file with the given index
     fn new_log_file(workspace: &Path, file_index: u64) -> io::Result<File> {
         let file_path = Self::get_file_path(workspace, file_index);
         OpenOptions::new().create(true).append(true).open(file_path)
@@ -74,6 +82,7 @@ impl LogManager {
         workspace.join(format!("log_{file_index}.bin"))
     }
 
+    /// Change log file if the current file is too large
     fn change_file_if_needed(&mut self) -> io::Result<()> {
         if self.current_file_size >= self.max_file_size {
             // Time to change log file
@@ -108,6 +117,7 @@ impl LogManager {
         Ok(())
     }
 
+    /// Load all events from a log file
     fn read_events_from_file(
         event_receiver: &mut dyn EventReceiver,
         file_path: &Path,
@@ -126,6 +136,7 @@ impl LogManager {
         Ok(())
     }
 
+    /// Load all events from all log files sorter by name
     pub fn read_all_events(&self, event_receiver: &mut dyn EventReceiver) -> io::Result<()> {
         let mut entries = fs::read_dir(&self.workspace)?
             .map(|res| res.map(|e| e.path()))
