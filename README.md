@@ -45,7 +45,7 @@ To use the `solana-cos-plugin`, follow these steps:
     Example `config.json`:
     ```json
     {
-        "libpath": "./target/debug/libblast_cos_plugin.so",
+        "libpath": "./target/debug/libsolana_cos_plugin.so",
         "workspace": "./workspace",
         "max_file_size_mb": 100,
         "slot_range": 1000
