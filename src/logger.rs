@@ -5,40 +5,46 @@ use std::path::{Path, PathBuf};
 use crate::event::{Event, EventReceiver};
 use crate::geyser_plugin_cos_config::GeyserPluginCosConfig;
 
+/// Manages binary log files
 pub struct LogManager {
+    /// The directory where log files are stored
     workspace: PathBuf,
+    /// The maximum size of a log file
     max_file_size: u64,
-    current_file: Option<File>,
+    /// The size of the current log file
     current_file_size: u64,
+    /// The index of the current log file
     file_index: u64,
+    /// The current log file
+    current_file: File,
 }
 
 impl LogManager {
     pub fn new(config: &GeyserPluginCosConfig) -> io::Result<Self> {
-        let log_workspace = PathBuf::from(config.workspace.to_string()).join("logs");
+        let workspace = PathBuf::from(config.workspace.to_string()).join("logs");
 
         // Ensure the log directory exists
-        std::fs::create_dir_all(&log_workspace)?;
+        std::fs::create_dir_all(&workspace)?;
 
-        let last_file_index = Self::find_latest_file_index(&log_workspace)?;
-        let new_file = Self::new_log_file(&log_workspace, last_file_index + 1)?;
+        let file_index = Self::find_latest_file_index(&workspace)?;
+        let current_file = Self::new_log_file(&workspace, file_index)?;
+        let current_file_size = Self::get_file_size(&current_file)?;
+        let max_file_size = config.max_file_size_mb * 1024 * 1024;
 
         Ok(LogManager {
-            workspace: log_workspace,
-            max_file_size: config.max_file_size_mb * 1024 * 1024,
-            current_file: new_file,
-            current_file_size: 0,
-            file_index: last_file_index + 1,
+            workspace,
+            max_file_size,
+            current_file,
+            current_file_size,
+            file_index,
         })
     }
 
     pub fn close(&mut self) -> io::Result<()> {
-        if let Some(file) = self.current_file.take() {
-            file.sync_all()?;
-        }
-        Ok(())
+        self.current_file.sync_all()
     }
 
+    /// Discover the latest log file index and extract the index from the file name
     fn find_latest_file_index(workspace: &Path) -> io::Result<u64> {
         let mut file_index = 0;
 
@@ -62,26 +68,39 @@ impl LogManager {
         Ok(file_index)
     }
 
-    fn new_log_file(workspace: &Path, file_index: u64) -> io::Result<Option<File>> {
-        let file_path = Self::get_current_file_path(workspace, file_index);
-        Ok(Some(
-            OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(file_path)?,
-        ))
+    /// Create a new log file with the given index
+    fn new_log_file(workspace: &Path, file_index: u64) -> io::Result<File> {
+        let file_path = Self::get_file_path(workspace, file_index);
+        OpenOptions::new().create(true).append(true).open(file_path)
     }
 
-    fn get_current_file_path(workspace: &Path, file_index: u64) -> PathBuf {
+    fn get_file_size(file: &File) -> io::Result<u64> {
+        Ok(file.metadata()?.len())
+    }
+
+    fn get_file_path(workspace: &Path, file_index: u64) -> PathBuf {
         workspace.join(format!("log_{file_index}.bin"))
     }
 
+    /// Change log file if the current file is too large
     fn change_file_if_needed(&mut self) -> io::Result<()> {
         if self.current_file_size >= self.max_file_size {
+            // Time to change log file
+            // Make sure to commit any cached data
+            self.current_file.sync_all()?;
+
+            // Previous log file is not needed anymore
+            let prev_file_path = Self::get_file_path(&self.workspace, self.file_index - 1);
+            if prev_file_path.exists() {
+                fs::remove_file(prev_file_path)?;
+            }
+
+            // Move to a new log file, leaving only one history log file
             self.file_index += 1;
-            self.current_file = Some(OpenOptions::new().create(true).append(true).open(
-                Self::get_current_file_path(&self.workspace, self.file_index),
-            )?);
+            self.current_file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(Self::get_file_path(&self.workspace, self.file_index))?;
             self.current_file_size = 0;
         }
         Ok(())
@@ -90,15 +109,15 @@ impl LogManager {
     pub fn append_event(&mut self, event: &Event) -> io::Result<()> {
         self.change_file_if_needed()?;
 
-        let file = self.current_file.as_mut().unwrap();
         let serialized = bincode::serialize(event).unwrap();
-        file.write_all(&serialized)?;
+        self.current_file.write_all(&serialized)?;
 
         self.current_file_size += serialized.len() as u64;
 
         Ok(())
     }
 
+    /// Load all events from a log file
     fn read_events_from_file(
         event_receiver: &mut dyn EventReceiver,
         file_path: &Path,
@@ -117,6 +136,7 @@ impl LogManager {
         Ok(())
     }
 
+    /// Load all events from all log files sorter by name
     pub fn read_all_events(&self, event_receiver: &mut dyn EventReceiver) -> io::Result<()> {
         let mut entries = fs::read_dir(&self.workspace)?
             .map(|res| res.map(|e| e.path()))

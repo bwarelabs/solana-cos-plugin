@@ -2,8 +2,8 @@
 use {
     crate::{
         cos_types::{
-            BlockInfoEvent, CosSlotStatus, CosVersionedConfirmedBlockWithEntries, EntryEvent,
-            Events, SlotData, SlotStatusEvent, TransactionEvent,
+            BlockInfoEvent, CosVersionedConfirmedBlockWithEntries, EntryEvent, Events,
+            SlotFinalizedEvent, TransactionEvent,
         },
         errors::GeyserPluginCosError,
         event::{Event, EventReceiver},
@@ -17,6 +17,7 @@ use {
         ReplicaTransactionInfoVersions, Result, SlotStatus,
     },
     solana_sdk::clock::Slot,
+    solana_transaction_status::{EntrySummary, VersionedTransactionWithStatusMeta},
     std::{
         collections::HashMap,
         fs::File,
@@ -27,8 +28,11 @@ use {
 
 #[derive(Default)]
 pub struct GeyserPluginCos {
-    datastore: Arc<Mutex<HashMap<Slot, SlotData>>>,
+    /// In memory storage for the confirmed blocks.
+    datastore: Arc<Mutex<HashMap<Slot, CosVersionedConfirmedBlockWithEntries>>>,
+    /// Solana geyser notification backup logger.
     logger: Arc<Mutex<Option<LogManager>>>,
+    /// On disk storage for the confirmed blocks.
     storage: Arc<Mutex<Option<StorageManager>>>,
 }
 
@@ -63,6 +67,8 @@ impl GeyserPlugin for GeyserPluginCos {
     /// {
     ///    "libpath": "/home/solana/target/release/libgayser_plugin_cos.so",
     ///    "workspace": "/path/to/workspace",
+    ///    "max_file_size_mb": 100,
+    ///    "slot_range": 1000
     /// }
     fn on_load(&mut self, config_file: &str, _is_reload: bool) -> Result<()> {
         solana_logger::setup_with_default("info");
@@ -117,23 +123,31 @@ impl GeyserPlugin for GeyserPluginCos {
         _parent: Option<u64>,
         status: SlotStatus,
     ) -> Result<()> {
+        log::debug!("EVENT: Slot {slot} status: {status:?}");
+
         let mut logger_lock = self.logger.lock().unwrap();
         let mut logger_opt = logger_lock.as_mut();
         let logger = logger_opt.as_mut().unwrap();
 
-        let slot_status_event = SlotStatusEvent {
-            slot,
-            status: status.into(),
-        };
-        match bincode::serialize(&Events::SlotStatus(slot_status_event.clone())) {
-            Ok(event_data) => {
-                let event = Event::new(event_data);
-                logger.append_event(&event)?;
+        if let Err(err) = match status {
+            SlotStatus::Rooted => {
+                let slot_finalized_event = SlotFinalizedEvent { slot };
+                match bincode::serialize(&Events::SlotFinalized(slot_finalized_event.clone())) {
+                    Ok(event_data) => {
+                        let event = Event::new(event_data);
+                        logger.append_event(&event)?;
 
-                self.on_slot_status(slot_status_event)
+                        self.on_slot_rooted(slot)?;
+                        self.on_slot_finalized(slot_finalized_event)
+                    }
+                    Err(err) => Err(GeyserPluginError::Custom(err)),
+                }
             }
-            Err(err) => Err(GeyserPluginError::Custom(err)),
+            _ => Ok(()),
+        } {
+            panic!("Error updating slot status: {err:?}")
         }
+        Ok(())
     }
 
     fn notify_transaction(
@@ -141,7 +155,7 @@ impl GeyserPlugin for GeyserPluginCos {
         transaction_info: ReplicaTransactionInfoVersions,
         slot: u64,
     ) -> Result<()> {
-        match transaction_info {
+        if let Err(err) = match transaction_info {
             ReplicaTransactionInfoVersions::V0_0_1(_) => Err(GeyserPluginError::Custom(Box::new(
                 GeyserPluginCosError::ReplicaTransactionV001NotSupported,
             ))),
@@ -154,6 +168,12 @@ impl GeyserPlugin for GeyserPluginCos {
                     slot,
                     transaction: transaction_info.into(),
                 };
+                log::debug!(
+                    "EVENT: Slot {slot} index = {} transaction = {}",
+                    transaction.transaction.meta.index,
+                    transaction.transaction.transaction.signatures[0]
+                );
+
                 match bincode::serialize(&Events::Transaction(transaction.clone())) {
                     Ok(event_data) => {
                         let event = Event::new(event_data);
@@ -164,11 +184,14 @@ impl GeyserPlugin for GeyserPluginCos {
                     Err(err) => Err(GeyserPluginError::Custom(err)),
                 }
             }
+        } {
+            panic!("Error processing transaction: {err:?}")
         }
+        Ok(())
     }
 
     fn notify_block_metadata(&self, block_info: ReplicaBlockInfoVersions) -> Result<()> {
-        match block_info {
+        if let Err(err) = match block_info {
             ReplicaBlockInfoVersions::V0_0_1(_) => Err(GeyserPluginError::Custom(Box::new(
                 GeyserPluginCosError::ReplicaBlockV001NotSupported,
             ))),
@@ -176,11 +199,22 @@ impl GeyserPlugin for GeyserPluginCos {
                 GeyserPluginCosError::ReplicaBlockV001NotSupported,
             ))),
             ReplicaBlockInfoVersions::V0_0_3(block_info) => {
+                let block_info_event: BlockInfoEvent = block_info.into();
+                log::debug!(
+                    "EVENT: Slot {} metadata tx_count = {}",
+                    block_info_event.slot,
+                    block_info_event.executed_transaction_count
+                );
+                log::debug!(
+                    "EVENT: Slot {} metadata entry_count = {}",
+                    block_info_event.slot,
+                    block_info_event.entry_count
+                );
+
                 let mut logger_lock = self.logger.lock().unwrap();
                 let mut logger_opt = logger_lock.as_mut();
                 let logger = logger_opt.as_mut().unwrap();
 
-                let block_info_event: BlockInfoEvent = block_info.into();
                 match bincode::serialize(&Events::BlockInfo(block_info_event.clone())) {
                     Ok(event_data) => {
                         let event = Event::new(event_data);
@@ -191,20 +225,30 @@ impl GeyserPlugin for GeyserPluginCos {
                     Err(err) => Err(GeyserPluginError::Custom(err)),
                 }
             }
+        } {
+            panic!("Error processing block metadata: {err:?}")
         }
+        Ok(())
     }
 
     fn notify_entry(&self, entry: ReplicaEntryInfoVersions<'_>) -> Result<()> {
-        match entry {
+        if let Err(err) = match entry {
             ReplicaEntryInfoVersions::V0_0_1(_) => Err(GeyserPluginError::Custom(Box::new(
                 GeyserPluginCosError::ReplicaEntryV001NotSupported,
             ))),
             ReplicaEntryInfoVersions::V0_0_2(entry) => {
+                let entry_event: EntryEvent = entry.into();
+                log::debug!(
+                    "EVENT: Slot {} entry index = {} hash = {}",
+                    entry_event.slot,
+                    entry_event.index,
+                    entry_event.hash
+                );
+
                 let mut logger_lock = self.logger.lock().unwrap();
                 let mut logger_opt = logger_lock.as_mut();
                 let logger = logger_opt.as_mut().unwrap();
 
-                let entry_event: EntryEvent = entry.into();
                 match bincode::serialize(&Events::Entry(entry_event.clone())) {
                     Ok(event_data) => {
                         let event = Event::new(event_data);
@@ -215,7 +259,11 @@ impl GeyserPlugin for GeyserPluginCos {
                     Err(err) => Err(GeyserPluginError::Custom(err)),
                 }
             }
+        } {
+            // TODO: Why is this not happening?
+            panic!("Error processing entry: {err:?}")
         }
+        Ok(())
     }
 
     fn transaction_notifications_enabled(&self) -> bool {
@@ -234,103 +282,108 @@ impl GeyserPluginCos {
 
     fn receive_inner(&mut self, event: Event) -> Result<()> {
         match bincode::deserialize(&event.data).unwrap() {
-            Events::SlotStatus(slot_status_event) => self.on_slot_status(slot_status_event),
+            Events::SlotFinalized(finalized_event) => self.on_slot_finalized(finalized_event),
             Events::Transaction(tx_event) => self.on_transaction(tx_event),
             Events::BlockInfo(block_info_event) => self.on_block_info(block_info_event),
             Events::Entry(entry_event) => self.on_entry(entry_event),
         }
     }
 
-    fn on_slot_status(&self, slot_status_event: SlotStatusEvent) -> Result<()> {
-        match slot_status_event.status {
-            CosSlotStatus::Processed => self.on_slot_processed(slot_status_event),
-            CosSlotStatus::Rooted => self.on_slot_processed(slot_status_event),
-            CosSlotStatus::Confirmed => self.on_slot_confirmed(slot_status_event),
-        }
-    }
-
     fn on_transaction(&self, tx_event: TransactionEvent) -> Result<()> {
         let mut datastore = self.datastore.lock().unwrap();
-        let slot_data = datastore.entry(tx_event.slot).or_insert(SlotData {
-            block_with_entries: CosVersionedConfirmedBlockWithEntries::default(),
-            status: CosSlotStatus::Processed,
-        });
+        let block_with_entries = datastore.entry(tx_event.slot).or_default();
 
-        slot_data
-            .block_with_entries
-            .block
-            .transactions
-            .push(tx_event.transaction.into());
+        let index = tx_event.transaction.meta.index;
+        if index >= block_with_entries.block.transactions.len() {
+            block_with_entries.block.transactions.resize(
+                tx_event.transaction.meta.index + 1,
+                VersionedTransactionWithStatusMeta {
+                    transaction: Default::default(),
+                    meta: Default::default(),
+                },
+            );
+        }
+        block_with_entries.block.transactions[index] = tx_event.transaction.into();
 
         Ok(())
     }
 
     fn on_block_info(&self, block_info_event: BlockInfoEvent) -> Result<()> {
         let mut datastore = self.datastore.lock().unwrap();
-        let slot_data = datastore.entry(block_info_event.slot).or_insert(SlotData {
-            block_with_entries: CosVersionedConfirmedBlockWithEntries::default(),
-            status: CosSlotStatus::Processed,
-        });
+        let block_with_entries = datastore.entry(block_info_event.slot).or_default();
 
-        slot_data.block_with_entries.block.previous_blockhash = block_info_event.parent_blockhash;
-        slot_data.block_with_entries.block.blockhash = block_info_event.blockhash;
-        slot_data.block_with_entries.block.parent_slot = block_info_event.parent_slot;
-        slot_data.block_with_entries.block.rewards = block_info_event.rewards;
-        slot_data.block_with_entries.block.block_time = block_info_event.block_time;
-        slot_data.block_with_entries.block.block_height = block_info_event.block_height;
+        block_with_entries.block.previous_blockhash = block_info_event.parent_blockhash;
+        block_with_entries.block.blockhash = block_info_event.blockhash;
+        block_with_entries.block.parent_slot = block_info_event.parent_slot;
+        block_with_entries.block.rewards = block_info_event.rewards;
+        block_with_entries.block.block_time = block_info_event.block_time;
+        block_with_entries.block.block_height = block_info_event.block_height;
+        block_with_entries.executed_transaction_count = block_info_event.executed_transaction_count;
+        block_with_entries.entry_count = block_info_event.entry_count;
 
         Ok(())
     }
 
     fn on_entry(&self, entry_event: EntryEvent) -> Result<()> {
         let mut datastore = self.datastore.lock().unwrap();
-        let slot_data = datastore.entry(entry_event.slot).or_insert(SlotData {
-            block_with_entries: CosVersionedConfirmedBlockWithEntries::default(),
-            status: CosSlotStatus::Processed,
-        });
-        slot_data
-            .block_with_entries
-            .entries
-            .push(entry_event.into());
+        let block_with_entries = datastore.entry(entry_event.slot).or_default();
+
+        let index = entry_event.index;
+        if index >= block_with_entries.entries.len() {
+            block_with_entries
+                .entries
+                .resize_with(entry_event.index + 1, || EntrySummary {
+                    num_hashes: Default::default(),
+                    hash: Default::default(),
+                    num_transactions: Default::default(),
+                    starting_transaction_index: Default::default(),
+                });
+        }
+        block_with_entries.entries[index] = entry_event.into();
+
         Ok(())
     }
 
-    fn on_slot_processed(&self, slot_status_event: SlotStatusEvent) -> Result<()> {
-        let mut datastore = self.datastore.lock().unwrap();
-        let slot_data = datastore.entry(slot_status_event.slot).or_insert(SlotData {
-            block_with_entries: CosVersionedConfirmedBlockWithEntries::default(),
-            status: CosSlotStatus::Processed,
-        });
-        slot_data.status = slot_status_event.status;
-        Ok(())
-    }
+    fn on_slot_rooted(&self, slot: Slot) -> Result<()> {
+        let datastore = self.datastore.lock().unwrap();
+        if let Some(block_with_entries) = datastore.get(&slot) {
+            log::debug!("Saving slot {slot} to storage");
+            // Self::check_slot_complete(slot, block_with_entries)?;
 
-    fn on_slot_confirmed(&self, slot_status_event: SlotStatusEvent) -> Result<()> {
-        let mut datastore = self.datastore.lock().unwrap();
-        if let Some(slot_data) = datastore.remove(&slot_status_event.slot) {
-            let slot = slot_status_event.slot;
-            if GeyserPluginCos::check_slot_complete(&slot_data) {
-                log::info!("Slot {slot} is complete");
-                self.save_confirmed_block_with_entries(slot, slot_data.block_with_entries)?;
-            } else {
-                log::warn!("Slot {slot} is not complete, skipping")
-            }
+            let mut storage_lock = self.storage.lock().unwrap();
+            let mut storage_opt = storage_lock.as_mut();
+            storage_opt
+                .as_mut()
+                .unwrap()
+                .save(slot, block_with_entries)?;
         }
         Ok(())
     }
 
-    fn check_slot_complete(_slot_data: &SlotData) -> bool {
-        true
+    fn on_slot_finalized(&self, slot_finalized_event: SlotFinalizedEvent) -> Result<()> {
+        self.datastore
+            .lock()
+            .unwrap()
+            .remove(&slot_finalized_event.slot);
+        Ok(())
     }
 
-    fn save_confirmed_block_with_entries(
-        &self,
+    fn check_slot_complete(
         slot: Slot,
-        confirmed_block: CosVersionedConfirmedBlockWithEntries,
+        block_with_entries: &CosVersionedConfirmedBlockWithEntries,
     ) -> Result<()> {
-        let mut storage_lock = self.storage.lock().unwrap();
-        let mut storage_opt = storage_lock.as_mut();
-        storage_opt.as_mut().unwrap().save(slot, confirmed_block)?;
+        // TODO: entry count is always 0, even when there are entries!
+        // Should we correct block metadata or ignore this misalignment?
+        if block_with_entries.executed_transaction_count
+            != block_with_entries.block.transactions.len() as u64
+            || block_with_entries.entry_count != block_with_entries.entries.len() as u64
+        {
+            return Err(GeyserPluginError::Custom(Box::new(
+                GeyserPluginCosError::InternalError {
+                    msg: format!("Slot {slot} is not complete"),
+                },
+            )));
+        }
         Ok(())
     }
 }

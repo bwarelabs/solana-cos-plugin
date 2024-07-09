@@ -1,5 +1,5 @@
 use solana_geyser_plugin_interface::geyser_plugin_interface::{
-    ReplicaBlockInfoV3, ReplicaEntryInfoV2, ReplicaTransactionInfoV2, SlotStatus,
+    ReplicaBlockInfoV3, ReplicaEntryInfoV2, ReplicaTransactionInfoV2,
 };
 use solana_sdk::{
     hash::Hash,
@@ -12,19 +12,8 @@ use solana_transaction_status::{
 };
 
 use crate::cos_types::{
-    BlockInfoEvent, CosSlotStatus, CosTransactionStatusMeta, CosVersionedTransactionWithStatusMeta,
-    EntryEvent,
+    BlockInfoEvent, CosTransactionStatusMeta, CosVersionedTransactionWithStatusMeta, EntryEvent,
 };
-
-impl From<SlotStatus> for CosSlotStatus {
-    fn from(status: SlotStatus) -> Self {
-        match status {
-            SlotStatus::Processed => CosSlotStatus::Processed,
-            SlotStatus::Rooted => CosSlotStatus::Rooted,
-            SlotStatus::Confirmed => CosSlotStatus::Confirmed,
-        }
-    }
-}
 
 impl From<&ReplicaBlockInfoV3<'_>> for BlockInfoEvent {
     fn from(block_info: &ReplicaBlockInfoV3) -> Self {
@@ -92,6 +81,7 @@ impl From<&ReplicaTransactionInfoV2<'_>> for CosVersionedTransactionWithStatusMe
                     .transaction_status_meta
                     .loaded_addresses
                     .clone(),
+                index: transaction_info.index,
             },
         }
     }

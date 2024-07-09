@@ -7,6 +7,7 @@ mod errors;
 mod event;
 mod logger;
 mod storage;
+mod compression;
 
 #[macro_use]
 extern crate serde_derive;

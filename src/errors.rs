@@ -12,13 +12,13 @@ pub enum GeyserPluginCosError {
     ReplicaEntryV001NotSupported,
 
     #[error("Error message: ({msg})")]
-    IOError { msg: String },
+    InternalError { msg: String },
 }
 
 impl From<std::io::Error> for GeyserPluginCosError {
     fn from(err: std::io::Error) -> Self {
-        GeyserPluginCosError::IOError {
-            msg: format!("IO error: {:?}", err),
+        GeyserPluginCosError::InternalError {
+            msg: format!("General error: {err:?}"),
         }
     }
 }
