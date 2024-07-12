@@ -9,4 +9,6 @@ pub struct GeyserPluginCosConfig {
     pub max_file_size_mb: u64,
     /// The maximum number of slots to include in a slot range.
     pub slot_range: u64,
+    /// Commit slot delay in number of slots.
+    pub commit_slot_delay: u64,
 }

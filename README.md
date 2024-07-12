@@ -45,10 +45,11 @@ To use the `solana-cos-plugin`, follow these steps:
     Example `config.json`:
     ```json
     {
-        "libpath": "./target/debug/libsolana_cos_plugin.so",
+        "libpath": "./target/release/libsolana_cos_plugin.so",
         "workspace": "./workspace",
         "max_file_size_mb": 100,
-        "slot_range": 1000
+        "slot_range": 1000,
+        "commit_slot_delay": 500
     }
     ```
 
@@ -56,6 +57,7 @@ To use the `solana-cos-plugin`, follow these steps:
     - **`workspace`**: A working folder where the plugin will store files while running.
     - **`max_file_size_mb`**: Maximum file size for storing data. When this size is reached, a new file is created.
     - **`slot_range`**: How many slots per folder to store on file storage.
+    - **`commit_slot_delay`**: How many slots to wait before moving a slot range from staging to storage.
 
 2. **Start the Solana Validator with the Geyser Plugin:**
     Run the following command in your project directory:
@@ -71,8 +73,7 @@ The architecture of the `solana-cos-plugin` is centered around several key class
 
 - **`GeyserPluginCosConfig`**: This is the configuration class of the plugin. It reads and validates the configuration parameters from the `config.json` file.
 - **`GeyserPluginCos`**: This is the main plugin interface that implements the `GeyserPlugin` interface from Solana. It handles the interaction with Solana's data stream and coordinates data store to disk.
-- **`LogManager`**: This class manages the persistent storage. It saves all data received via the `GeyserPlugin` interface and is used to recover from shutdowns, failover exceptions, and other interruptions.
-- **`StorageManager`**: This class manages finalized blocks storage. It prepares and save each block on disk, so that they can later be uploaded to COS.
+- **`StorageManager`**: This class manages finalized slots storage. It prepares and save each slot on disk, so that they can later be uploaded to COS.
 
 ### Live syncing to COS
 

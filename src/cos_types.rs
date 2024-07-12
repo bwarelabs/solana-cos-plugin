@@ -63,11 +63,6 @@ impl Default for CosVersionedConfirmedBlockWithEntries {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SlotFinalizedEvent {
-    pub slot: Slot,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TransactionEvent {
     pub slot: Slot,
     pub transaction: CosVersionedTransactionWithStatusMeta,
@@ -94,14 +89,6 @@ pub struct EntryEvent {
     pub hash: Hash,
     pub executed_transaction_count: u64,
     pub starting_transaction_index: usize,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Events {
-    SlotFinalized(SlotFinalizedEvent),
-    Transaction(TransactionEvent),
-    BlockInfo(BlockInfoEvent),
-    Entry(EntryEvent),
 }
 
 pub type RowKey = String;
