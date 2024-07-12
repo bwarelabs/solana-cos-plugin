@@ -1,0 +1,33 @@
+{
+    "name": "Solana COS plugin",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": "..",
+    },
+    "runArgs": [
+        "--add-host=host.docker.internal:host-gateway"
+    ],
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.profiles.linux": {
+                    "bash": {
+                        "path": "/bin/bash"
+                    }
+                },
+                "editor.insertSpaces": true,
+                "files.trimTrailingWhitespace": true,
+                "[markdown]": {
+                    "files.trimTrailingWhitespace": false
+                }
+            },
+            // Add the IDs of extensions you want installed when the container is created.
+            "extensions": [
+                "streetsidesoftware.code-spell-checker",
+                "rust-lang.rust-analyzer",
+                "bungcip.better-toml"
+            ]
+        }
+    },
+    "remoteUser": "admin"
+}

@@ -1,0 +1,17 @@
+{
+    "cSpell.words": [
+        "bincode",
+        "blockhash",
+        "chrono",
+        "ctypes",
+        "libpath",
+        "libsolana",
+        "prost",
+        "proto",
+        "protobuf",
+        "Pubkey",
+        "solana",
+        "sysvar",
+        "unparseable"
+    ]
+}
