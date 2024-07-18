@@ -74,9 +74,27 @@ The architecture of the `solana-cos-plugin` is centered around several key class
 - **`LogManager`**: This class manages the persistent storage. It saves all data received via the `GeyserPlugin` interface and is used to recover from shutdowns, failover exceptions, and other interruptions.
 - **`StorageManager`**: This class manages finalized blocks storage. It prepares and save each block on disk, so that they can later be uploaded to COS.
 
-### Architecture Diagram
+### Live syncing to COS
 
-> TODO: ![Architecture Diagram](path/to/architecture_diagram.png)
+The `solana-cos-plugin`, despite its name, doesn't actually upload the data to COS directly.
+Rather, it uses a separate process called the [Solana Syncer](https://github.com/bwarelabs/solana-syncer).
+
+The flow of the data is as follows:
+
+```mermaid
+graph TD
+    A -->|Dumps data to storage| B[Disk]
+    C[Solana Syncer] -->|Reads data from storage| B
+    C -->|Uploads data to COS| D[COS]
+
+    subgraph Solana Validator Node
+        A[Solana COS Plugin]
+    end
+```
+
+The plugin serializes data in the same format as BigTable (i.e., using protobuf and compression) and stores it
+in a staging location on local storage. Once the data is fully written to disk, it is moved from the staging location
+to the final location. From there, the syncer will pick it up, upload it to COS, and then delete the local copy.
 
 ## Contributing
 
