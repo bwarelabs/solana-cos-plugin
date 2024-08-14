@@ -1,3 +1,4 @@
+use solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     hash::Hash,
@@ -6,7 +7,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{EntrySummary, Rewards, VersionedConfirmedBlock};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 pub struct CosTransactionInfo {
     pub slot: Slot, // The slot that contains the block with this transaction in it
     pub index: u32, // Where the transaction is located in the block
@@ -14,14 +15,14 @@ pub struct CosTransactionInfo {
     pub memo: Option<String>, // Transaction memo
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct CosTransactionStatusMeta {
     pub status: Option<TransactionError>,
     pub loaded_addresses: LoadedAddresses,
     pub index: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct CosVersionedTransactionWithStatusMeta {
     pub transaction: VersionedTransaction,
     pub meta: CosTransactionStatusMeta,
@@ -41,10 +42,12 @@ pub struct CosVersionedConfirmedBlockWithEntries {
     pub entries: Vec<EntrySummary>,
     pub executed_transaction_count: u64,
     pub entry_count: u64,
+    pub slot_status: SlotStatus,
 }
 
 impl Default for CosVersionedConfirmedBlockWithEntries {
     fn default() -> Self {
+        let slot_status = SlotStatus::Processed;
         Self {
             block: VersionedConfirmedBlock {
                 previous_blockhash: Default::default(),
@@ -58,17 +61,18 @@ impl Default for CosVersionedConfirmedBlockWithEntries {
             entries: Default::default(),
             executed_transaction_count: Default::default(),
             entry_count: Default::default(),
+            slot_status,
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct TransactionEvent {
     pub slot: Slot,
     pub transaction: CosVersionedTransactionWithStatusMeta,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct BlockInfoEvent {
     pub parent_slot: Slot,
     pub parent_blockhash: String,
@@ -81,7 +85,7 @@ pub struct BlockInfoEvent {
     pub entry_count: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct EntryEvent {
     pub slot: Slot,
     pub index: usize,

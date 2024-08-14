@@ -91,11 +91,7 @@ impl GeyserPlugin for GeyserPluginCos {
         status: SlotStatus,
     ) -> Result<()> {
         log::info!("EVENT: Slot {slot} status: {status:?}");
-
-        match status {
-            SlotStatus::Rooted => self.on_slot_rooted(slot),
-            _ => Ok(()),
-        }
+        self.on_slot_status(slot, status)
     }
 
     fn notify_transaction(
@@ -202,6 +198,8 @@ impl GeyserPluginCos {
         let mut datastore = self.datastore.lock().unwrap();
         let block_with_entries = datastore.entry(block_info_event.slot).or_default();
 
+        log::debug!("EVENT: BlockInfoEvent {block_info_event:?}");
+
         block_with_entries.block.previous_blockhash = block_info_event.parent_blockhash;
         block_with_entries.block.blockhash = block_info_event.blockhash;
         block_with_entries.block.parent_slot = block_info_event.parent_slot;
@@ -234,10 +232,25 @@ impl GeyserPluginCos {
         Ok(())
     }
 
+    fn on_slot_status(&self, slot: Slot, status: SlotStatus) -> Result<()> {
+        {
+            let mut datastore = self.datastore.lock().unwrap();
+            let block_with_entries = datastore.entry(slot).or_default();
+
+            block_with_entries.slot_status = status;
+        }
+        match status {
+            SlotStatus::Rooted => self.on_slot_rooted(slot),
+            _ => Ok(()),
+        }
+    }
+
     fn on_slot_rooted(&self, slot: Slot) -> Result<()> {
         // NOTE: We have no guaranteed order of events for current slot.
         // (e.g. it might be that we still need to process some transactions for the current slot
         // when we receive slot status rooted).
+        // NOTE: We only save rooted slots to storage. All non rooted slots are skipped in solana
+        // and we don't need to save them, just make sure to cleanup the cache.
         //
         // But we can safely assume that all previous slots are complete.
         let first_slot = if slot >= 100 { slot - 100 } else { 0 };
@@ -252,9 +265,13 @@ impl GeyserPluginCos {
                     block_with_entries = datastore.remove(&prev_slot);
                 }
                 if let Some(block_with_entries) = block_with_entries {
-                    log::debug!("EVENT: Saving slot {prev_slot} to storage");
+                    if block_with_entries.slot_status != SlotStatus::Rooted {
+                        log::debug!("EVENT: Slot {prev_slot} is not rooted, discarding");
+                    } else {
+                        log::debug!("EVENT: Saving slot {prev_slot} to storage");
 
-                    self.storage.save(prev_slot, &block_with_entries)?;
+                        self.storage.save(prev_slot, &block_with_entries)?;
+                    }
                 }
             }
         }
