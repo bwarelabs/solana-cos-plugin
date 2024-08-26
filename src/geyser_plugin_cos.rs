@@ -1,9 +1,8 @@
 /// Main entry for the Tencent COS plugin
 use {
     crate::{
-        cos_types::{
-            BlockInfoEvent, CosVersionedConfirmedBlockWithEntries, EntryEvent, TransactionEvent,
-        },
+        cos_types::{BlockInfoEvent, EntryEvent, TransactionEvent},
+        datastore::Datastore,
         errors::GeyserPluginCosError,
         geyser_plugin_cos_config::GeyserPluginCosConfig,
         storage::{Storage, StorageManager},
@@ -16,7 +15,6 @@ use {
     solana_sdk::clock::Slot,
     solana_transaction_status::{EntrySummary, VersionedTransactionWithStatusMeta},
     std::{
-        collections::HashMap,
         fs::File,
         io::Read,
         sync::{Arc, Mutex},
@@ -25,9 +23,9 @@ use {
 
 #[derive(Default)]
 pub struct GeyserPluginCos {
-    /// In memory storage for the finalized slots.
-    datastore: Arc<Mutex<HashMap<Slot, CosVersionedConfirmedBlockWithEntries>>>,
-    /// On disk storage for the finalized slots.
+    /// In memory storage for finalized slots
+    datastore: Arc<Mutex<Datastore>>,
+    /// On disk storage for finalized slots.
     storage: StorageManager,
 }
 
@@ -73,7 +71,7 @@ impl GeyserPlugin for GeyserPluginCos {
             }
         })?;
 
-        self.datastore = Arc::new(Mutex::new(HashMap::new()));
+        self.datastore = Arc::new(Mutex::new(Datastore::new(&config)));
         self.storage = StorageManager::new(&config)?;
 
         Ok(())
@@ -90,7 +88,7 @@ impl GeyserPlugin for GeyserPluginCos {
         _parent: Option<u64>,
         status: SlotStatus,
     ) -> Result<()> {
-        log::info!("EVENT: Slot {slot} status: {status:?}");
+        log::info!("COS: Slot {slot} status: {status:?}");
         self.on_slot_status(slot, status)
     }
 
@@ -109,7 +107,7 @@ impl GeyserPlugin for GeyserPluginCos {
                     transaction: transaction_info.into(),
                 };
                 log::debug!(
-                    "EVENT: Slot {slot} index = {} transaction = {}",
+                    "COS: Slot {slot} index = {} transaction = {}",
                     transaction.transaction.meta.index,
                     transaction.transaction.transaction.signatures[0]
                 );
@@ -129,12 +127,12 @@ impl GeyserPlugin for GeyserPluginCos {
             ReplicaBlockInfoVersions::V0_0_3(block_info) => {
                 let block_info_event: BlockInfoEvent = block_info.into();
                 log::debug!(
-                    "EVENT: Slot {} metadata tx_count = {}",
+                    "COS: Slot {} metadata tx_count = {}",
                     block_info_event.slot,
                     block_info_event.executed_transaction_count
                 );
                 log::debug!(
-                    "EVENT: Slot {} metadata entry_count = {}",
+                    "COS: Slot {} metadata entry_count = {}",
                     block_info_event.slot,
                     block_info_event.entry_count
                 );
@@ -151,7 +149,7 @@ impl GeyserPlugin for GeyserPluginCos {
             ReplicaEntryInfoVersions::V0_0_2(entry) => {
                 let entry_event: EntryEvent = entry.into();
                 log::debug!(
-                    "EVENT: Slot {} entry index = {} hash = {}",
+                    "COS: Slot {} entry index = {} hash = {}",
                     entry_event.slot,
                     entry_event.index,
                     entry_event.hash
@@ -177,7 +175,9 @@ impl GeyserPluginCos {
 
     fn on_transaction(&self, tx_event: TransactionEvent) -> Result<()> {
         let mut datastore = self.datastore.lock().unwrap();
-        let block_with_entries = datastore.entry(tx_event.slot).or_default();
+        datastore.check_first_slot(tx_event.slot)?;
+
+        let block_with_entries = datastore.get_mut_entry(tx_event.slot);
 
         let index = tx_event.transaction.meta.index;
         if index >= block_with_entries.block.transactions.len() {
@@ -196,9 +196,11 @@ impl GeyserPluginCos {
 
     fn on_block_info(&self, block_info_event: BlockInfoEvent) -> Result<()> {
         let mut datastore = self.datastore.lock().unwrap();
-        let block_with_entries = datastore.entry(block_info_event.slot).or_default();
+        datastore.check_first_slot(block_info_event.slot)?;
 
-        log::debug!("EVENT: BlockInfoEvent {block_info_event:?}");
+        let block_with_entries = datastore.get_mut_entry(block_info_event.slot);
+
+        log::debug!("COS: BlockInfoEvent {block_info_event:?}");
 
         block_with_entries.block.previous_blockhash = block_info_event.parent_blockhash;
         block_with_entries.block.blockhash = block_info_event.blockhash;
@@ -214,7 +216,9 @@ impl GeyserPluginCos {
 
     fn on_entry(&self, entry_event: EntryEvent) -> Result<()> {
         let mut datastore = self.datastore.lock().unwrap();
-        let block_with_entries = datastore.entry(entry_event.slot).or_default();
+        datastore.check_first_slot(entry_event.slot)?;
+
+        let block_with_entries = datastore.get_mut_entry(entry_event.slot);
 
         let index = entry_event.index;
         if index >= block_with_entries.entries.len() {
@@ -235,7 +239,9 @@ impl GeyserPluginCos {
     fn on_slot_status(&self, slot: Slot, status: SlotStatus) -> Result<()> {
         {
             let mut datastore = self.datastore.lock().unwrap();
-            let block_with_entries = datastore.entry(slot).or_default();
+            datastore.check_first_slot(slot)?;
+
+            let block_with_entries = datastore.get_mut_entry(slot);
 
             block_with_entries.slot_status = status;
         }
@@ -262,13 +268,13 @@ impl GeyserPluginCos {
                 {
                     // Unlock mutex as soon as possible
                     let mut datastore = self.datastore.lock().unwrap();
-                    block_with_entries = datastore.remove(&prev_slot);
+                    block_with_entries = datastore.remove_entry(prev_slot);
                 }
                 if let Some(block_with_entries) = block_with_entries {
                     if block_with_entries.slot_status != SlotStatus::Rooted {
-                        log::debug!("EVENT: Slot {prev_slot} is not rooted, discarding");
+                        log::debug!("COS: Slot {prev_slot} is not rooted, discarding");
                     } else {
-                        log::debug!("EVENT: Saving slot {prev_slot} to storage");
+                        log::debug!("COS: Saving slot {prev_slot} to storage");
 
                         self.storage.save(prev_slot, &block_with_entries)?;
                     }

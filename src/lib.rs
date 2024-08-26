@@ -4,6 +4,7 @@ pub mod geyser_plugin_cos_config;
 mod compression;
 mod conversions;
 mod cos_types;
+mod datastore;
 mod errors;
 mod storage;
 

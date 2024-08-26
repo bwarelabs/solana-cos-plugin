@@ -11,6 +11,9 @@ pub enum GeyserPluginCosError {
     #[error("Replica entry V0.0.1 not supported anymore")]
     ReplicaEntryV001NotSupported,
 
+    #[error("Skipping incomplete block range")]
+    SkipIncompleteBlockRange,
+
     #[error("Error message: ({msg})")]
     InternalError { msg: String },
 }

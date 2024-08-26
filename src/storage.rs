@@ -67,6 +67,10 @@ impl StorageManager {
         let commit_slot_delay = config.commit_slot_delay;
 
         std::fs::create_dir_all(&ready_path)?;
+        // Ensure clean staging directory
+        if Path::exists(&staging_path) {
+            std::fs::remove_dir_all(&staging_path)?;
+        }
         std::fs::create_dir_all(&staging_path)?;
 
         let rw_lock = RwLock::new((ready_path, staging_path));
@@ -219,10 +223,7 @@ impl StorageManager {
             if let Some(folder_name) = slot_range_path.file_name() {
                 if let Some(folder_name) = folder_name.to_str() {
                     if folder_name != current_slot_range_str {
-                        let timestamp = chrono::Utc::now().timestamp_millis();
-                        let storage_folder_path =
-                            ready_path.join(format!("{folder_name}_{timestamp:0>15}"));
-
+                        let storage_folder_path = ready_path.join(folder_name);
                         // Move the staging directory to the storage directory
                         std::fs::rename(&slot_range_path, &storage_folder_path)?;
                     }
@@ -345,7 +346,7 @@ impl StorageManager {
         let start_slot = slot - (slot % slot_range);
         let start_slot_str = Self::format_slot(start_slot);
         let end_slot_str = Self::format_slot(start_slot + slot_range);
-        format!("slot_range_{start_slot_str}_{end_slot_str}")
+        format!("range_{start_slot_str}_{end_slot_str}")
     }
 
     fn format_slot_single(slot: Slot) -> String {
@@ -354,7 +355,7 @@ impl StorageManager {
     }
 
     fn format_slot(slot: Slot) -> String {
-        format!("{slot:0>10}")
+        format!("{slot:016x}")
     }
 
     fn slot_to_blocks_key(slot: Slot) -> String {
