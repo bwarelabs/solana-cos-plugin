@@ -1,19 +1,16 @@
 use crate::compression::compress_best;
 use crate::cos_types::{
-    CosTransactionInfo, CosVersionedConfirmedBlockWithEntries,
-    CosVersionedTransactionWithStatusMeta, RowData, RowKey, RowType,
+    CosVersionedConfirmedBlockWithEntries, CosVersionedTransactionWithStatusMeta, RowData, RowKey,
+    RowType,
 };
 use crate::geyser_plugin_cos_config::GeyserPluginCosConfig;
 use solana_sdk::clock::Slot;
 use solana_sdk::instruction::CompiledInstruction;
 use solana_sdk::message::AccountKeys;
 use solana_sdk::pubkey::Pubkey;
-use solana_storage_proto::convert::{entries, generated, tx_by_addr};
+use solana_storage_proto::convert::{entries, generated};
 use solana_transaction_status::extract_memos::ExtractMemos;
-use solana_transaction_status::{
-    EntrySummary, TransactionByAddrInfo, VersionedTransactionWithStatusMeta,
-};
-use std::collections::HashMap;
+use solana_transaction_status::EntrySummary;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -90,61 +87,11 @@ impl StorageManager {
         slot: Slot,
         confirmed_block: &CosVersionedConfirmedBlockWithEntries,
     ) -> std::io::Result<()> {
-        let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
         let CosVersionedConfirmedBlockWithEntries {
             block: confirmed_block,
             entries,
             ..
         } = confirmed_block;
-
-        let mut tx_cells = Vec::with_capacity(confirmed_block.transactions.len());
-        for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
-            let VersionedTransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
-            let err = meta.status.clone().err();
-            let index = index as u32;
-            let signature = transaction.signatures[0];
-            let memo = solana_transaction_status::extract_and_fmt_memos(transaction_with_meta);
-
-            for address in transaction_with_meta.account_keys().iter() {
-                if !solana_program::sysvar::is_sysvar_id(address) {
-                    by_addr
-                        .entry(address)
-                        .or_default()
-                        .push(TransactionByAddrInfo {
-                            signature,
-                            err: err.clone(),
-                            index,
-                            memo: memo.clone(),
-                            block_time: confirmed_block.block_time,
-                        });
-                }
-            }
-
-            tx_cells.push((
-                signature.to_string(),
-                CosTransactionInfo {
-                    slot,
-                    index,
-                    err,
-                    memo,
-                },
-            ));
-        }
-
-        let tx_by_addr_cells: Vec<_> = by_addr
-            .into_iter()
-            .map(|(address, transaction_info_by_addr)| {
-                (
-                    format!("{}_{}", address, Self::slot_to_tx_by_addr_key(slot)),
-                    tx_by_addr::TransactionByAddr {
-                        tx_by_addrs: transaction_info_by_addr
-                            .into_iter()
-                            .map(|by_addr| by_addr.into())
-                            .collect(),
-                    },
-                )
-            })
-            .collect();
 
         let entry_cells = [(
             Self::slot_to_entries_key(slot),
@@ -170,19 +117,6 @@ impl StorageManager {
 
         let _r_lock = self.rw_lock.read().unwrap();
         let (_, staging_path) = &*_r_lock;
-
-        if !tx_cells.is_empty() {
-            self.put_bincode_cells::<CosTransactionInfo>(staging_path, slot, "tx", &tx_cells)?;
-        }
-
-        if !tx_by_addr_cells.is_empty() {
-            self.put_protobuf_cells::<tx_by_addr::TransactionByAddr>(
-                staging_path,
-                slot,
-                "tx_by_addr",
-                &tx_by_addr_cells,
-            )?;
-        }
 
         if !entries.is_empty() {
             self.put_protobuf_cells::<entries::Entries>(
@@ -263,24 +197,6 @@ impl StorageManager {
                 Some(Self::extract_and_fmt_memo_data(memo_data))
             })
             .collect()
-    }
-
-    fn put_bincode_cells<T>(
-        &self,
-        staging_path: &Path,
-        slot: Slot,
-        table_name: &str,
-        cells: &[(RowKey, T)],
-    ) -> std::io::Result<()>
-    where
-        T: serde::ser::Serialize,
-    {
-        let mut new_row_data = vec![];
-        for (row_key, data) in cells {
-            let data = compress_best(&bincode::serialize(&data).unwrap())?;
-            new_row_data.push((row_key, "bin".to_string(), data));
-        }
-        self.save_row_data(staging_path, slot, table_name, &new_row_data)
     }
 
     fn put_protobuf_cells<T>(
@@ -364,10 +280,6 @@ impl StorageManager {
 
     fn slot_to_entries_key(slot: Slot) -> String {
         Self::slot_to_key(slot)
-    }
-
-    fn slot_to_tx_by_addr_key(slot: Slot) -> String {
-        Self::slot_to_key(!slot)
     }
 
     fn slot_to_key(slot: Slot) -> String {

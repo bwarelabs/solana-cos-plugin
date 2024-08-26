@@ -2,7 +2,7 @@
     "name": "Solana COS plugin",
     "build": {
         "dockerfile": "Dockerfile",
-        "context": "..",
+        "context": ".."
     },
     "runArgs": [
         "--add-host=host.docker.internal:host-gateway"
