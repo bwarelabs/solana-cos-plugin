@@ -59,15 +59,15 @@ impl GeyserPlugin for GeyserPluginCos {
         solana_logger::setup_with_default("info");
 
         let plugin_name = self.name();
-        log::info!("Loading plugin {plugin_name} from config_file {config_file}");
+        log::info!("COS: Loading plugin {plugin_name} from config_file {config_file}");
 
         let mut file = File::open(config_file)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
         let config: GeyserPluginCosConfig = serde_json::from_str(&contents).map_err(|err| {
-            log::error!("The config file is not in the JSON format expected: {err:?}");
+            log::error!("COS: The config file is not in the JSON format expected: {err:?}");
             GeyserPluginError::ConfigFileReadError {
-                msg: format!("The config file is not in the JSON format expected: {err:?}"),
+                msg: format!("COS: The config file is not in the JSON format expected: {err:?}"),
             }
         })?;
 
@@ -79,7 +79,7 @@ impl GeyserPlugin for GeyserPluginCos {
 
     fn on_unload(&mut self) {
         let plugin_name = self.name();
-        log::info!("Unloading plugin: {plugin_name}");
+        log::info!("COS: Unloading plugin: {plugin_name}");
     }
 
     fn update_slot_status(
