@@ -51,7 +51,6 @@ impl GeyserPlugin for GeyserPluginCos {
     /// {
     ///    "libpath": "/home/solana/target/release/libgayser_plugin_cos.so",
     ///    "workspace": "/path/to/workspace",
-    ///    "max_file_size_mb": 100,
     ///    "slot_range": 1000
     ///    "commit_slot_delay": 100
     /// }

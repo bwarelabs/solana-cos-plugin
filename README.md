@@ -47,7 +47,6 @@ To use the `solana-cos-plugin`, follow these steps:
     {
         "libpath": "./target/release/libsolana_cos_plugin.so",
         "workspace": "./workspace",
-        "max_file_size_mb": 100,
         "slot_range": 1000,
         "commit_slot_delay": 500
     }
@@ -55,7 +54,6 @@ To use the `solana-cos-plugin`, follow these steps:
 
     - **`libpath`**: Path to the plugin's shared library.
     - **`workspace`**: A working folder where the plugin will store files while running.
-    - **`max_file_size_mb`**: Maximum file size for storing data. When this size is reached, a new file is created.
     - **`slot_range`**: How many slots per folder to store on file storage.
     - **`commit_slot_delay`**: How many slots to wait before moving a slot range from staging to storage.
 
