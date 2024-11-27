@@ -26,3 +26,4 @@ RUN useradd -G sudo -U -m -s /bin/bash admin \
     && echo "admin ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 USER admin
+WORKDIR /home/admin
