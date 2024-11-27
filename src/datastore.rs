@@ -3,7 +3,7 @@ use {
         cos_types::CosVersionedConfirmedBlockWithEntries, errors::GeyserPluginCosError,
         geyser_plugin_cos_config::GeyserPluginCosConfig,
     },
-    solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError, Result},
+    agave_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError, Result},
     solana_sdk::clock::Slot,
     std::collections::HashMap,
 };

@@ -1,11 +1,11 @@
-use solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
+use agave_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     hash::Hash,
     message::{v0::LoadedAddresses, AccountKeys},
     transaction::{TransactionError, VersionedTransaction},
 };
-use solana_transaction_status::{EntrySummary, Rewards, VersionedConfirmedBlock};
+use solana_transaction_status::{EntrySummary, RewardsAndNumPartitions, VersionedConfirmedBlock};
 
 #[derive(Serialize, Debug)]
 pub struct CosTransactionInfo {
@@ -55,6 +55,7 @@ impl Default for CosVersionedConfirmedBlockWithEntries {
                 parent_slot: Default::default(),
                 transactions: Default::default(),
                 rewards: Default::default(),
+                num_partitions: Default::default(),
                 block_time: Default::default(),
                 block_height: Default::default(),
             },
@@ -78,7 +79,7 @@ pub struct BlockInfoEvent {
     pub parent_blockhash: String,
     pub slot: Slot,
     pub blockhash: String,
-    pub rewards: Rewards,
+    pub rewards: RewardsAndNumPartitions,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
     pub executed_transaction_count: u64,

@@ -1,5 +1,5 @@
-use solana_geyser_plugin_interface::geyser_plugin_interface::{
-    ReplicaBlockInfoV3, ReplicaEntryInfoV2, ReplicaTransactionInfoV2,
+use agave_geyser_plugin_interface::geyser_plugin_interface::{
+    ReplicaBlockInfoV4, ReplicaEntryInfoV2, ReplicaTransactionInfoV2,
 };
 use solana_sdk::{
     hash::Hash,
@@ -15,14 +15,14 @@ use crate::cos_types::{
     BlockInfoEvent, CosTransactionStatusMeta, CosVersionedTransactionWithStatusMeta, EntryEvent,
 };
 
-impl From<&ReplicaBlockInfoV3<'_>> for BlockInfoEvent {
-    fn from(block_info: &ReplicaBlockInfoV3) -> Self {
+impl From<&ReplicaBlockInfoV4<'_>> for BlockInfoEvent {
+    fn from(block_info: &ReplicaBlockInfoV4) -> Self {
         BlockInfoEvent {
             parent_slot: block_info.parent_slot,
             parent_blockhash: block_info.parent_blockhash.to_string(),
             slot: block_info.slot,
             blockhash: block_info.parent_blockhash.to_string(),
-            rewards: block_info.rewards.to_vec(),
+            rewards: block_info.rewards.clone(),
             block_time: block_info.block_time,
             block_height: block_info.block_height,
             executed_transaction_count: block_info.executed_transaction_count,

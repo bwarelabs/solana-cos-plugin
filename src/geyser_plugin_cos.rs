@@ -7,11 +7,11 @@ use {
         geyser_plugin_cos_config::GeyserPluginCosConfig,
         storage::{Storage, StorageManager},
     },
-    log, serde_json,
-    solana_geyser_plugin_interface::geyser_plugin_interface::{
+    agave_geyser_plugin_interface::geyser_plugin_interface::{
         GeyserPlugin, GeyserPluginError, ReplicaBlockInfoVersions, ReplicaEntryInfoVersions,
         ReplicaTransactionInfoVersions, Result, SlotStatus,
     },
+    log, serde_json,
     solana_sdk::clock::Slot,
     solana_transaction_status::{EntrySummary, VersionedTransactionWithStatusMeta},
     std::{
@@ -44,7 +44,7 @@ impl GeyserPlugin for GeyserPluginCos {
     ///
     /// # Format of the config file:
     /// * The `workspace` sets the destination folder of intermediate files.
-    /// "workspace" : "/path/to/workspace"
+    ///   "workspace" : "/path/to/workspace"
     ///
     /// # Examples
     ///
@@ -123,7 +123,10 @@ impl GeyserPlugin for GeyserPluginCos {
             ReplicaBlockInfoVersions::V0_0_2(_) => Err(GeyserPluginError::Custom(Box::new(
                 GeyserPluginCosError::ReplicaBlockV001NotSupported,
             ))),
-            ReplicaBlockInfoVersions::V0_0_3(block_info) => {
+            ReplicaBlockInfoVersions::V0_0_3(_) => Err(GeyserPluginError::Custom(Box::new(
+                GeyserPluginCosError::ReplicaBlockV001NotSupported,
+            ))),
+            ReplicaBlockInfoVersions::V0_0_4(block_info) => {
                 let block_info_event: BlockInfoEvent = block_info.into();
                 log::debug!(
                     "COS: Slot {} metadata tx_count = {}",
@@ -204,7 +207,8 @@ impl GeyserPluginCos {
         block_with_entries.block.previous_blockhash = block_info_event.parent_blockhash;
         block_with_entries.block.blockhash = block_info_event.blockhash;
         block_with_entries.block.parent_slot = block_info_event.parent_slot;
-        block_with_entries.block.rewards = block_info_event.rewards;
+        block_with_entries.block.rewards = block_info_event.rewards.rewards;
+        block_with_entries.block.num_partitions = block_info_event.rewards.num_partitions;
         block_with_entries.block.block_time = block_info_event.block_time;
         block_with_entries.block.block_height = block_info_event.block_height;
         block_with_entries.executed_transaction_count = block_info_event.executed_transaction_count;
